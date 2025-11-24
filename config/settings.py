@@ -1,30 +1,50 @@
 from pathlib import Path
 import os
+import dj_database_url
 from dotenv import load_dotenv
+from corsheaders.defaults import default_headers
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Environment selectors
 ENV = os.getenv("DJANGO_ENV", "dev")
-
-# Загружаем .env из папки envs
 env_path = BASE_DIR / "envs" / ENV / ".env"
-load_dotenv(env_path)
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+# Load environment file
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    print(f"[WARN] .env file not found: {env_path}")
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "fallback-secret")
 
-# SECURITY WARNING: don't run with debug turned on in production!
+# Secret Key
+SECRET_KEY = os.getenv("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    raise ValueError("DJANGO_SECRET_KEY is not set.")
+
+
+# Debug
 DEBUG = os.getenv("DJANGO_DEBUG", "False") == "True"
 
-ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "127.0.0.1,localhost").split(",")
+
+# Allowed Hosts
+ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS").split(",")
 
 
-# Application definition
+print("DEBUG:", os.getenv("DJANGO_DEBUG"))
+print("Loaded .env:", env_path)
+
+
+# CORS
+CORS_ALLOWED_ORIGINS = os.getenv("DJANGO_CORS_ALLOWED_ORIGINS", "").split(",")
+CSRF_TRUSTED_ORIGINS = os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    'x-csrftoken',
+]
+
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -34,12 +54,22 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
+     # --- сторонние ---
+    'corsheaders',
     'rest_framework',
+
+    # --- твои приложения ---
+    'apps.common.apps.CommonConfig',
+
+
+    # --- cleanup ---
+    'django_cleanup.apps.CleanupConfig',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -68,19 +98,47 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/5.2/ref/settings/#databases
+# REST Framework
+REST_FRAMEWORK = {
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    # Filters
+    'DEFAULT_FILTER_BACKENDS': [
+        'django_filters.rest_framework.DjangoFilterBackend',
+    ],
+
+    # Pagination
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    
 }
 
 
+# Database  
+if DEBUG:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.getenv("POSTGRES_DB"),
+            "USER": os.getenv("POSTGRES_USER"),
+            "PASSWORD": os.getenv("POSTGRES_PASSWORD"),
+            "HOST": os.getenv("POSTGRES_HOST", "localhost"),
+            "PORT": os.getenv("POSTGRES_PORT", "5432"),
+        }
+    }
+# Logging
+db = DATABASES["default"]
+print(f"[INFO] Connected to database ENGINE={db['ENGINE']}, NAME={db['NAME']}, HOST={db.get('HOST', '')}, PORT={db.get('PORT', '')}")
+
+
+
 # Password validation
-# https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -99,30 +157,21 @@ AUTH_PASSWORD_VALIDATORS = [
 
 
 # Internationalization
-# https://docs.djangoproject.com/en/5.2/topics/i18n/
 
 LANGUAGE_CODE = 'ru-ru'
-
 TIME_ZONE = 'Asia/Almaty'
-
 USE_I18N = True
-
 USE_TZ = True
 
 
+# Корневая папка, куда будут собираться статические файлы
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Статические файлы
 STATIC_URL = '/static/'
-
-# Папка для собранных статики (collectstatic)
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Папки, где Django ищет статику в приложениях и проекте
-# STATICFILES_DIRS = [
-#     BASE_DIR / "static",
-# ]
-
-# Медиафайлы (для загрузок)
+# Путь к каталогу, где будут храниться загруженные файлы (не должен находиться в репозитории с кодом)
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# Меdia файлы
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

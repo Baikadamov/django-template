@@ -7,7 +7,6 @@ __pycache__/
 
 # Virtual env
 .venv/
-env/
 venv/
 
 # Django stuff
@@ -21,6 +20,4 @@ media/
 
 # Env files
 .env
-.env.*
-envs/
 secrets/
